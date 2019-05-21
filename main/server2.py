@@ -1,88 +1,93 @@
 import socket
+import sys
+from _thread import *
+ 
+class Clint:
+    addr = ''
+    port = 0
+    conn = None 
+    DeviceName = ''
+   
 
+Clintlist = [] 
+
+
+host = ''
+port = 8888
+ 
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+print("Socket Created")
 
 try:
-    import selectors
-except ImportError:
-    import selectors34 as selectors
-import types
-from requests import get
-import requests as req
+    s.bind((host, port))
+except socket.error:
+    print("Bining Failed");
+    sys.exit()
 
-ip = get('https://api.ipify.org').text
-print ("My public IP address is:"+ ip)
+print("Socket had been bounded")
 
-url = "https://kihome.000webhostapp.com/api/led/update.php?id=1&status=" + ip
-resp = req.get(url)
-print(resp.text)
+s.listen(10)
+
+print("Socket is Ready")
 
 
-HOST = '192.168.1.5'  # Standard loopback interface address (localhost)
-PORT = 8888        # Port to listen on (non-privileged ports are > 1023)
+def GetClientIndexByAddress(addr):
+    for index,clint in enumerate(Clintlist):
+        if clint.addr == addr:
+            return index
+    return -1 
+
+def GetClientIndexByName(clientname):
+    for index,clint in enumerate(Clintlist):
+        if clint.DeviceName == clientname:
+            return index
+    return -1    
+
+def clientthread(conn,addr):
+    #welcomemessage = "Hello Clint"
+    #conn.send(welcomemessage.encode())
+
+    while True:
+        data = conn.recv(1024)
+        #reply = "OK." + data.decode() + "Add:" + addr[0]
+        if not data:
+            break;
+        
+        hexdata = []
+        for byte in data:
+            hexdata.append(hex(byte ))
+        
+        
+        if hexdata[0] == hex(0x0C) and hexdata[1] == hex(0x0C) :
+            if hexdata[2] == hex(0x01):
+                index = GetClientIndexByAddress(addr[0])
+                if index != -1:
+                    name = data[3:] 
+                    Clintlist[index].DeviceName = name 
+                    conn.sendall(name)
+                else:    
+                    conn.sendall("error")
+        print("data = " + data.decode() )
+        #conn.sendall(data)
+    conn.close()
+    print("connection closed")
 
 
-sel = selectors.DefaultSelector()
-# ...
-lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-lsock.bind((HOST, PORT))
-lsock.listen(5)
-print('listening on', (HOST, PORT))
-lsock.setblocking(False)
-sel.register(lsock, selectors.EVENT_READ, data=None)
-
-
-def accept_wrapper(sock):
-    conn, addr = sock.accept()  # Should be ready to read
-    print('accepted connection from', addr)
-    conn.setblocking(False)
-    data = types.SimpleNamespace(addr=addr, inb=b'', outb=b'')
-    events = selectors.EVENT_READ | selectors.EVENT_WRITE
-    sel.register(conn, events, data=data)
+while 1:
+    conn, addr = s.accept()
     
-    
-def service_connection(key, mask):
-    sock = key.fileobj
-    data = key.data
-    if mask & selectors.EVENT_READ:
-        recv_data = sock.recv(1024)  # Should be ready to read
-        if recv_data:
-            data.outb += recv_data
-        else:
-            print('closing connection to', data.addr)
-            sel.unregister(sock)
-            sock.close()
-    if mask & selectors.EVENT_WRITE:
-        if data.outb:
-            hexdata = []
-            for byte in data.outb:
-                hexdata.append(hex(byte))
-            
-            
-            if hexdata[0] == hex(0x0C) and hexdata[1] == hex(0x0C) :
-                if hexdata[2] == hex(0x01):
-                    sent = sock.send(b'command1')  # Should be ready to write
-                    data.outb = data.outb[sent:]
-                if hexdata[2] == hex(0x02):
-                    sent = sock.send(b'command2')  # Should be ready to write
-                    data.outb = data.outb[sent:]
-                else:
-                    data.outb = b''
-            else: 
-                data.outb = b''
-            #print('echoing', repr(data.outb), 'to', data.addr)
-            #sent = sock.send(data.outb)  # Should be ready to write
-            #data.outb = data.outb[sent:]
-            
-            
-while True:
-    events = sel.select(timeout=None)
-    for key, mask in events:
-        if key.data is None:
-            accept_wrapper(key.fileobj)
-        else:
-            service_connection(key, mask)
-            
+    c = Clint()
+    c.addr = addr[0]
+    c.port = addr[1]
+    c.conn = conn
+    c.DeviceName = ''
+    Clintlist.append(c)
 
+ 
     
-    
-    
+    print("Connected with " + addr[0] + ":" + str(addr[1]))
+    start_new_thread(clientthread, (conn,addr,))
+
+print("connection closed")
+s.close()
