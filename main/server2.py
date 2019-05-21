@@ -53,9 +53,25 @@ def service_connection(key, mask):
             sock.close()
     if mask & selectors.EVENT_WRITE:
         if data.outb:
-            print('echoing', repr(data.outb), 'to', data.addr)
-            sent = sock.send(data.outb)  # Should be ready to write
-            data.outb = data.outb[sent:]
+            hexdata = []
+            for byte in data.outb:
+                hexdata.append(hex(byte))
+            
+            
+            if hexdata[0] == hex(0x0C) and hexdata[1] == hex(0x0C) :
+                if hexdata[2] == hex(0x01):
+                    sent = sock.send(b'command1')  # Should be ready to write
+                    data.outb = data.outb[sent:]
+                if hexdata[2] == hex(0x02):
+                    sent = sock.send(b'command2')  # Should be ready to write
+                    data.outb = data.outb[sent:]
+                else:
+                    data.outb = b''
+            else: 
+                data.outb = b''
+            #print('echoing', repr(data.outb), 'to', data.addr)
+            #sent = sock.send(data.outb)  # Should be ready to write
+            #data.outb = data.outb[sent:]
             
             
 while True:
